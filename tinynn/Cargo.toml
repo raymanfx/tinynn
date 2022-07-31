@@ -1,0 +1,10 @@
+[package]
+name = "tinynn"
+version = "0.1.0"
+edition = "2021"
+description = "Tiny Neural Networks"
+authors = ["Christopher N. Hesse <raymanfx@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+
+[dependencies]
