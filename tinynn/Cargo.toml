@@ -8,3 +8,4 @@ license = "MIT"
 readme = "README.md"
 
 [dependencies]
+num-traits = "0.2.15"

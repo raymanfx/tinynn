@@ -38,6 +38,46 @@ impl<T> Array<T> {
         &mut self.buf
     }
 
+    /// Returns a 2D representation on the array.
+    ///
+    /// Panics if the shape is not 2-dimensional.
+    pub fn as_2d(&self) -> Vec<&[T]> {
+        assert_eq!(self.shape.len(), 2);
+        let rows = self.shape[0];
+        let cols = self.shape[1];
+
+        let mut slices = Vec::new();
+        for i in 0..rows {
+            let offset = i * cols;
+            slices.push(&self.buf[offset..offset + cols]);
+        }
+
+        slices
+    }
+
+    /// Returns a 2D representation on the array, allowing for mutation.
+    ///
+    /// Panics if the shape is not 2-dimensional.
+    pub fn as_mut_2d(&mut self) -> Vec<&mut [T]> {
+        assert_eq!(self.shape.len(), 2);
+        let rows = self.shape[0];
+        let cols = self.shape[1];
+
+        let mut slices = Vec::new();
+        for i in 0..rows {
+            // This is safe because...
+            // (from http://stackoverflow.com/questions/25730586):
+            // The Rust compiler does not know that when you ask a mutable iterator for the next
+            // element, that you get a different reference every time and never the same reference
+            // twice. Of course, we know that such an iterator won't give you the same reference twice.
+            let offset = i * cols;
+            let slice = unsafe { mem::transmute(&mut self.buf[offset..offset + cols]) };
+            slices.push(slice);
+        }
+
+        slices
+    }
+
     /// Returns the shape of the array.
     ///
     /// Each axis is represented by an integer.
