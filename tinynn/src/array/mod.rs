@@ -144,6 +144,62 @@ where
 
         self.shape = shape;
     }
+
+    /// Returns the transpose of the array.
+    ///
+    /// This operation might affect the internal shape. In some cases, elements will be
+    /// reordered (copied) as well.
+    ///
+    /// # Arguments
+    ///
+    /// * `axes` - A Vec describing which axes to swap
+    pub fn transpose(mut self, axes: Vec<(usize, usize)>) -> Array<T> {
+        // for vectors (1D), this is a noop
+        if self.shape.len() == 1 {
+            return self;
+        }
+
+        // for matrices (2D), we just do standard matrix transpose
+        if self.shape.len() == 2 {
+            // if this is a square matrix, we can just swap its elements
+            if self.shape[0] == self.shape[1] {
+                // make sure we handle all the elements we need to handle
+                let rows = self.shape[0];
+                let mut matrix = self.as_mut_2d();
+                for i in 1..rows {
+                    for j in 0..i {
+                        let tmp = matrix[i][j];
+                        matrix[i][j] = matrix[j][i];
+                        matrix[j][i] = tmp;
+                    }
+                }
+                return self;
+            }
+
+            // this is not a square matrix ..
+            // allocate an output matrix and perform the naive transpose
+            let mut output = Array::with_shape(vec![self.shape[1], self.shape[0]], self.buf[0]);
+
+            // transpose the matrix
+            let in_mat = self.as_2d();
+            let mut out_mat = output.as_mut_2d();
+            for i in 0..self.shape[0] {
+                for j in 0..self.shape[1] {
+                    out_mat[j][i] = in_mat[i][j];
+                }
+            }
+            return output;
+        }
+
+        // silence compiler warning about unused variable
+        let _ = axes;
+
+        // for n-dimensional arrays, we permute the axes as desired
+        panic!(
+            "transpose() is not implemented for n-dimensional arrays (shape: {:?})",
+            self.shape
+        );
+    }
 }
 
 impl<T, const D1: usize> From<[T; D1]> for Array<T> {
@@ -247,5 +303,34 @@ mod tests {
         let mut array: Array<u8> = Array::with_shape(vec![2, 3], 0);
         array.reshape(vec![3, 2]);
         assert_eq!(array.shape(), &vec![3, 2]);
+    }
+
+    #[test]
+    fn transpose_1d() {
+        let array: Array<i8> = Array::from([1, 2, -3]);
+        let array = array.transpose(vec![]);
+        assert_eq!(array.shape(), &vec![3]);
+        assert_eq!(array.as_slice(), &vec![1, 2, -3]);
+    }
+
+    #[test]
+    fn transpose_2d() {
+        let array: Array<i8> = Array::from([[1, 2, -3], [3, 4, -5]]);
+        let array = array.transpose(vec![]);
+        assert_eq!(array.shape(), &vec![3, 2]);
+        assert_eq!(array.as_2d(), vec![[1, 3], [2, 4], [-3, -5]]);
+    }
+
+    #[test]
+    fn transpose_2d_square() {
+        let array: Array<i8> = Array::from([[1, 2], [3, 4]]);
+        let array = array.transpose(vec![]);
+        assert_eq!(array.shape(), &vec![2, 2]);
+        assert_eq!(array.as_2d(), vec![[1, 3], [2, 4]]);
+
+        let array: Array<i8> = Array::from([[1, 2, 3], [4, 5, 6], [7, 8, 9]]);
+        let array = array.transpose(vec![]);
+        assert_eq!(array.shape(), &vec![3, 3]);
+        assert_eq!(array.as_2d(), vec![[1, 4, 7], [2, 5, 8], [3, 6, 9]]);
     }
 }
