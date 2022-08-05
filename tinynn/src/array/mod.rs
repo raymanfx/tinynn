@@ -1,5 +1,8 @@
 use std::mem;
 
+mod matrix;
+use matrix::Matrix;
+
 mod ops;
 
 /// A generic n-dimensional array.
@@ -41,41 +44,17 @@ impl<T> Array<T> {
     /// Returns a 2D representation on the array.
     ///
     /// Panics if the shape is not 2-dimensional.
-    pub fn as_2d(&self) -> Vec<&[T]> {
+    pub fn as_matrix(&self) -> Matrix<&Self> {
         assert_eq!(self.shape.len(), 2);
-        let rows = self.shape[0];
-        let cols = self.shape[1];
-
-        let mut slices = Vec::new();
-        for i in 0..rows {
-            let offset = i * cols;
-            slices.push(&self.buf[offset..offset + cols]);
-        }
-
-        slices
+        Matrix { array: self }
     }
 
     /// Returns a 2D representation on the array, allowing for mutation.
     ///
     /// Panics if the shape is not 2-dimensional.
-    pub fn as_mut_2d(&mut self) -> Vec<&mut [T]> {
+    pub fn as_mut_matrix(&mut self) -> Matrix<&mut Self> {
         assert_eq!(self.shape.len(), 2);
-        let rows = self.shape[0];
-        let cols = self.shape[1];
-
-        let mut slices = Vec::new();
-        for i in 0..rows {
-            // This is safe because...
-            // (from http://stackoverflow.com/questions/25730586):
-            // The Rust compiler does not know that when you ask a mutable iterator for the next
-            // element, that you get a different reference every time and never the same reference
-            // twice. Of course, we know that such an iterator won't give you the same reference twice.
-            let offset = i * cols;
-            let slice = unsafe { mem::transmute(&mut self.buf[offset..offset + cols]) };
-            slices.push(slice);
-        }
-
-        slices
+        Matrix { array: self }
     }
 
     /// Returns the shape of the array.
@@ -165,7 +144,7 @@ where
             if self.shape[0] == self.shape[1] {
                 // make sure we handle all the elements we need to handle
                 let rows = self.shape[0];
-                let mut matrix = self.as_mut_2d();
+                let mut matrix = self.as_mut_matrix();
                 for i in 1..rows {
                     for j in 0..i {
                         let tmp = matrix[i][j];
@@ -181,8 +160,8 @@ where
             let mut output = Array::with_shape(vec![self.shape[1], self.shape[0]], self.buf[0]);
 
             // transpose the matrix
-            let in_mat = self.as_2d();
-            let mut out_mat = output.as_mut_2d();
+            let in_mat = self.as_matrix();
+            let mut out_mat = output.as_mut_matrix();
             for i in 0..self.shape[0] {
                 for j in 0..self.shape[1] {
                     out_mat[j][i] = in_mat[i][j];
@@ -314,11 +293,14 @@ mod tests {
     }
 
     #[test]
-    fn transpose_2d() {
+    fn transpose_matrix() {
         let array: Array<i8> = Array::from([[1, 2, -3], [3, 4, -5]]);
         let array = array.transpose(vec![]);
         assert_eq!(array.shape(), &vec![3, 2]);
-        assert_eq!(array.as_2d(), vec![[1, 3], [2, 4], [-3, -5]]);
+        let matrix = array.as_matrix();
+        assert_eq!(matrix[0], vec![1, 3]);
+        assert_eq!(matrix[1], vec![2, 4]);
+        assert_eq!(matrix[2], vec![-3, -5]);
     }
 
     #[test]
@@ -326,11 +308,16 @@ mod tests {
         let array: Array<i8> = Array::from([[1, 2], [3, 4]]);
         let array = array.transpose(vec![]);
         assert_eq!(array.shape(), &vec![2, 2]);
-        assert_eq!(array.as_2d(), vec![[1, 3], [2, 4]]);
+        let matrix = array.as_matrix();
+        assert_eq!(matrix[0], vec![1, 3]);
+        assert_eq!(matrix[1], vec![2, 4]);
 
         let array: Array<i8> = Array::from([[1, 2, 3], [4, 5, 6], [7, 8, 9]]);
         let array = array.transpose(vec![]);
         assert_eq!(array.shape(), &vec![3, 3]);
-        assert_eq!(array.as_2d(), vec![[1, 4, 7], [2, 5, 8], [3, 6, 9]]);
+        let matrix = array.as_matrix();
+        assert_eq!(matrix[0], vec![1, 4, 7]);
+        assert_eq!(matrix[1], vec![2, 5, 8]);
+        assert_eq!(matrix[2], vec![3, 6, 9]);
     }
 }

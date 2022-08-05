@@ -38,9 +38,9 @@ where
             let mut output = Array::with_shape(vec![lhs.shape[0], rhs.shape[1]], T::zero());
 
             // perform the actual matrix multiplication
-            let mut out_mat = output.as_mut_2d();
-            let lhs_mat = lhs.as_2d();
-            let rhs_mat = rhs.as_2d();
+            let mut out_mat = output.as_mut_matrix();
+            let lhs_mat = lhs.as_matrix();
+            let rhs_mat = rhs.as_matrix();
             for i in 0..lhs.shape[0] {
                 for j in 0..rhs.shape[1] {
                     let mut sum = T::zero();
