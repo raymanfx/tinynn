@@ -35,7 +35,7 @@ where
             assert_eq!(lhs.shape[1], rhs.shape[0]);
 
             // allocate output array
-            let mut output = Array::with_shape(vec![lhs.shape[0], rhs.shape[1]], T::zero());
+            let mut output = Array::new(vec![lhs.shape[0], rhs.shape[1]], T::zero());
 
             // perform the actual matrix multiplication
             let mut out_mat = output.as_mut_matrix();

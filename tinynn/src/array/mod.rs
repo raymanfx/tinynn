@@ -16,6 +16,34 @@ pub struct Array<T> {
 }
 
 impl<T> Array<T> {
+    /// Creates an array of the given shape.
+    ///
+    /// # Arguments
+    ///
+    /// * `shape` - A Vec describing the length of each axis
+    /// * `value` - Initial value for a new element
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tinynn::Array;
+    /// let array = Array::<f32>::new(vec![2, 2], 0.0);
+    /// ```
+    pub fn new(shape: Vec<usize>, value: T) -> Array<T>
+    where
+        T: Clone,
+    {
+        let len = shape
+            .clone()
+            .into_iter()
+            .reduce(|accum, item| accum * item)
+            .expect("invalid shape");
+
+        let mut buf = Vec::new();
+        buf.resize(len, value);
+        Array { buf, shape }
+    }
+
     /// Returns an empty array.
     ///
     /// # Examples
@@ -29,6 +57,25 @@ impl<T> Array<T> {
             buf: Vec::new(),
             shape: Vec::new(),
         }
+    }
+
+    /// Change the layout of the array, potentially altering its dimensions.
+    ///
+    /// Panics if the new shape would yield a different number of elements than the array
+    /// currently holds.
+    ///
+    /// # Arguments
+    ///
+    /// * `shape` - A Vec describing the length of each axis
+    pub fn reshape(mut self, shape: Vec<usize>) -> Array<T> {
+        let len = shape
+            .clone()
+            .into_iter()
+            .reduce(|accum, item| accum * item)
+            .expect("invalid shape");
+        assert_eq!(self.buf.len(), len);
+        self.shape = shape;
+        self
     }
 
     /// Returns the backing buffer.
@@ -87,43 +134,6 @@ impl<T> Array<T>
 where
     T: Copy,
 {
-    /// Creates an array of the given shape.
-    ///
-    /// # Arguments
-    ///
-    /// * `shape` - A Vec describing the length of each axis
-    /// * `value` - Initial value for a new element
-    pub fn with_shape(shape: Vec<usize>, value: T) -> Array<T> {
-        let len = shape
-            .clone()
-            .into_iter()
-            .reduce(|accum, item| accum * item)
-            .expect("invalid shape");
-
-        let mut buf = Vec::new();
-        buf.resize(len, value);
-        Array { buf, shape }
-    }
-
-    /// Change the layout of the array, potentially altering its dimensions.
-    ///
-    /// Panics if the new shape would yield a different number of elements than the array
-    /// currently holds.
-    ///
-    /// # Arguments
-    ///
-    /// * `shape` - A Vec describing the length of each axis
-    pub fn reshape(&mut self, shape: Vec<usize>) {
-        let len = shape
-            .clone()
-            .into_iter()
-            .reduce(|accum, item| accum * item)
-            .expect("invalid shape");
-        assert_eq!(self.buf.len(), len);
-
-        self.shape = shape;
-    }
-
     /// Returns the transpose of the array.
     ///
     /// This operation might affect the internal shape. In some cases, elements will be
@@ -157,7 +167,7 @@ where
 
             // this is not a square matrix ..
             // allocate an output matrix and perform the naive transpose
-            let mut output = Array::with_shape(vec![self.shape[1], self.shape[0]], self.buf[0]);
+            let mut output = Array::new(vec![self.shape[1], self.shape[0]], self.buf[0]);
 
             // transpose the matrix
             let in_mat = self.as_matrix();
@@ -255,9 +265,24 @@ mod tests {
     use super::Array;
 
     #[test]
+    fn new() {
+        let array: Array<u8> = Array::new(vec![2, 3], 0);
+        assert!(!array.shape().is_empty());
+        assert_eq!(array.shape(), &vec![2, 3]);
+    }
+
+    #[test]
     fn empty() {
         let array: Array<u8> = Array::empty();
         assert!(array.shape().is_empty());
+    }
+
+    #[test]
+    fn reshape() {
+        let array: Array<u8> = Array::new(vec![2, 3], 0);
+        assert_eq!(array.shape(), &vec![2, 3]);
+        let array = array.reshape(vec![3, 2]);
+        assert_eq!(array.shape(), &vec![3, 2]);
     }
 
     #[test]
@@ -275,13 +300,6 @@ mod tests {
         assert_eq!(array.shape().len(), 2);
         assert_eq!(array.shape()[0], 2);
         assert_eq!(array.shape()[1], 3);
-    }
-
-    #[test]
-    fn reshape() {
-        let mut array: Array<u8> = Array::with_shape(vec![2, 3], 0);
-        array.reshape(vec![3, 2]);
-        assert_eq!(array.shape(), &vec![3, 2]);
     }
 
     #[test]
