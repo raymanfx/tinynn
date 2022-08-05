@@ -215,6 +215,34 @@ where
     }
 }
 
+impl<T> From<Vec<T>> for Array<T> {
+    fn from(buf: Vec<T>) -> Array<T> {
+        let shape = vec![buf.len()];
+        Array { buf, shape }
+    }
+}
+
+impl<T> From<Vec<Vec<T>>> for Array<T> {
+    fn from(buf: Vec<Vec<T>>) -> Array<T> {
+        if buf.is_empty() || buf[0].is_empty() {
+            return Array::empty();
+        }
+
+        let rows = buf.len();
+        let cols = buf[0].len();
+        let buf = buf
+            .into_iter()
+            .reduce(|mut accum, item| {
+                assert_eq!(item.len(), cols);
+                accum.extend(item);
+                accum
+            })
+            .unwrap();
+        let shape = vec![rows, cols];
+        Array { buf, shape }
+    }
+}
+
 pub struct Iter<'a, T> {
     array: &'a Array<T>,
     offset: usize,
