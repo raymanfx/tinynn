@@ -1,4 +1,4 @@
-use std::mem;
+use std::{marker::PhantomData, mem};
 
 mod matrix;
 use matrix::Matrix;
@@ -8,14 +8,42 @@ mod ops;
 /// A generic n-dimensional array.
 ///
 /// This kind of array owns its data.
-/// Elements are stored in a linear buffer which can be grown and shrinked as needed.
-#[derive(Debug, Clone)]
-pub struct Array<T> {
-    buf: Vec<T>,
+/// Elements are stored in a linear array.
+#[derive(Debug)]
+pub struct Array<T, A> {
+    _marker: PhantomData<T>,
+    array: A,
     shape: Vec<usize>,
 }
 
-impl<T> Array<T> {
+impl<T, A> Array<T, A> {
+    /// Returns the shape of the array.
+    ///
+    /// Each axis is represented by an integer.
+    /// E.g. `vec![4]` indicates an one-dimensional array with four elements, while for example
+    ///      `vec![3, 3]` represents a matrix with three rows and three columns.
+    pub fn shape(&self) -> &Vec<usize> {
+        &self.shape
+    }
+
+    /// Returns an iterator over the array elements.
+    pub fn iter(&self) -> Iter<T, A> {
+        Iter {
+            array: self,
+            offset: 0,
+        }
+    }
+
+    /// Returns an iterator that allows modifying each value.
+    pub fn iter_mut(&mut self) -> IterMut<T, A> {
+        IterMut {
+            array: self,
+            offset: 0,
+        }
+    }
+}
+
+impl<T> Array<T, Vec<T>> {
     /// Creates an array of the given shape.
     ///
     /// # Arguments
@@ -27,9 +55,9 @@ impl<T> Array<T> {
     ///
     /// ```
     /// use tinynn::Array;
-    /// let array = Array::<f32>::new(vec![2, 2], 0.0);
+    /// let array = Array::new(vec![2, 2], 0.0);
     /// ```
-    pub fn new(shape: Vec<usize>, value: T) -> Array<T>
+    pub fn new(shape: Vec<usize>, value: T) -> Self
     where
         T: Clone,
     {
@@ -39,9 +67,13 @@ impl<T> Array<T> {
             .reduce(|accum, item| accum * item)
             .expect("invalid shape");
 
-        let mut buf = Vec::new();
-        buf.resize(len, value);
-        Array { buf, shape }
+        let mut array = Vec::new();
+        array.resize(len, value);
+        Array {
+            _marker: PhantomData,
+            array,
+            shape,
+        }
     }
 
     /// Returns an empty array.
@@ -50,12 +82,101 @@ impl<T> Array<T> {
     ///
     /// ```
     /// use tinynn::Array;
-    /// let array = Array::<f32>::empty();
+    /// let array = Array::<f32, Vec<f32>>::empty();
     /// ```
-    pub fn empty() -> Array<T> {
+    pub fn empty() -> Self {
         Array {
-            buf: Vec::new(),
+            _marker: PhantomData,
+            array: Vec::new(),
             shape: Vec::new(),
+        }
+    }
+}
+
+impl<T, A> AsRef<[T]> for Array<T, A>
+where
+    A: AsRef<[T]>,
+{
+    fn as_ref(&self) -> &[T] {
+        self.array.as_ref()
+    }
+}
+
+impl<T, A> AsMut<[T]> for Array<T, A>
+where
+    A: AsMut<[T]>,
+{
+    fn as_mut(&mut self) -> &mut [T] {
+        self.array.as_mut()
+    }
+}
+
+impl<T, A> Array<T, A>
+where
+    A: AsRef<[T]>,
+{
+    /// Returns a read-only representation of the array.
+    pub fn view(&self) -> Array<T, &[T]> {
+        let array = self.array.as_ref();
+        let shape = self.shape.clone();
+        Array {
+            _marker: PhantomData,
+            array,
+            shape,
+        }
+    }
+
+    /// Returns a 2D representation on the array.
+    ///
+    /// Panics if the shape is not 2-dimensional.
+    pub fn as_matrix(&self) -> Matrix<T, &[T]> {
+        assert_eq!(self.shape.len(), 2);
+        let rows = self.shape[0];
+        let cols = self.shape[1];
+        Matrix {
+            _marker: PhantomData,
+            array: self.array.as_ref(),
+            rows,
+            cols,
+        }
+    }
+}
+
+impl<T, A> Array<T, A>
+where
+    A: AsMut<[T]>,
+{
+    /// Returns a 2D representation on the array, allowing for mutation.
+    ///
+    /// Panics if the shape is not 2-dimensional.
+    pub fn as_mut_matrix(&mut self) -> Matrix<T, &mut [T]> {
+        assert_eq!(self.shape.len(), 2);
+        let rows = self.shape[0];
+        let cols = self.shape[1];
+        Matrix {
+            _marker: PhantomData,
+            array: self.array.as_mut(),
+            rows,
+            cols,
+        }
+    }
+}
+
+impl<T, A> Array<T, A>
+where
+    T: Copy,
+    A: AsRef<[T]>,
+{
+    /// Returns a deep copy of self.
+    ///
+    /// The resulting array instance owns the element buffer.
+    pub fn clone(&self) -> Array<T, Vec<T>> {
+        let array = self.array.as_ref().to_vec();
+        let shape = self.shape.clone();
+        Array {
+            _marker: PhantomData,
+            array,
+            shape,
         }
     }
 
@@ -67,73 +188,17 @@ impl<T> Array<T> {
     /// # Arguments
     ///
     /// * `shape` - A Vec describing the length of each axis
-    pub fn reshape(mut self, shape: Vec<usize>) -> Array<T> {
+    pub fn reshape(mut self, shape: Vec<usize>) -> Self {
         let len = shape
             .clone()
             .into_iter()
             .reduce(|accum, item| accum * item)
             .expect("invalid shape");
-        assert_eq!(self.buf.len(), len);
+        assert_eq!(self.array.as_ref().len(), len);
         self.shape = shape;
         self
     }
 
-    /// Returns the backing buffer.
-    pub fn as_slice(&self) -> &[T] {
-        &self.buf
-    }
-
-    /// Returns the backing buffer, allowing for mutation.
-    pub fn as_mut_slice(&mut self) -> &mut [T] {
-        &mut self.buf
-    }
-
-    /// Returns a 2D representation on the array.
-    ///
-    /// Panics if the shape is not 2-dimensional.
-    pub fn as_matrix(&self) -> Matrix<&Self> {
-        assert_eq!(self.shape.len(), 2);
-        Matrix { array: self }
-    }
-
-    /// Returns a 2D representation on the array, allowing for mutation.
-    ///
-    /// Panics if the shape is not 2-dimensional.
-    pub fn as_mut_matrix(&mut self) -> Matrix<&mut Self> {
-        assert_eq!(self.shape.len(), 2);
-        Matrix { array: self }
-    }
-
-    /// Returns the shape of the array.
-    ///
-    /// Each axis is represented by an integer.
-    /// E.g. `vec![4]` indicates an one-dimensional array with four elements, while for example
-    ///      `vec![3, 3]` represents a matrix with three rows and three columns.
-    pub fn shape(&self) -> &Vec<usize> {
-        &self.shape
-    }
-
-    /// Returns an iterator over the array elements.
-    pub fn iter(&self) -> Iter<T> {
-        Iter {
-            array: self,
-            offset: 0,
-        }
-    }
-
-    /// Returns an iterator that allows modifying each value.
-    pub fn iter_mut(&mut self) -> IterMut<T> {
-        IterMut {
-            array: self,
-            offset: 0,
-        }
-    }
-}
-
-impl<T> Array<T>
-where
-    T: Copy,
-{
     /// Returns the transpose of the array.
     ///
     /// This operation might affect the internal shape. In some cases, elements will be
@@ -142,10 +207,10 @@ where
     /// # Arguments
     ///
     /// * `axes` - A Vec describing which axes to swap
-    pub fn transpose(mut self, axes: Vec<(usize, usize)>) -> Array<T> {
+    pub fn transpose(&self, axes: Vec<(usize, usize)>) -> Array<T, Vec<T>> {
         // for vectors (1D), this is a noop
         if self.shape.len() == 1 {
-            return self;
+            return Array::from(self.array.as_ref());
         }
 
         // for matrices (2D), we just do standard matrix transpose
@@ -154,20 +219,22 @@ where
             if self.shape[0] == self.shape[1] {
                 // make sure we handle all the elements we need to handle
                 let rows = self.shape[0];
-                let mut matrix = self.as_mut_matrix();
+                let mut output = self.clone();
+                let mut matrix = output.as_mut_matrix();
                 for i in 1..rows {
                     for j in 0..i {
                         let tmp = matrix[i][j];
+                        println!("### iter!!");
                         matrix[i][j] = matrix[j][i];
                         matrix[j][i] = tmp;
                     }
                 }
-                return self;
+                return output;
             }
 
             // this is not a square matrix ..
             // allocate an output matrix and perform the naive transpose
-            let mut output = Array::new(vec![self.shape[1], self.shape[0]], self.buf[0]);
+            let mut output = Array::new(vec![self.shape[1], self.shape[0]], self.array.as_ref()[0]);
 
             // transpose the matrix
             let in_mat = self.as_matrix();
@@ -191,91 +258,148 @@ where
     }
 }
 
-impl<T, const D1: usize> From<[T; D1]> for Array<T> {
-    fn from(data: [T; D1]) -> Array<T> {
+impl<T, const D1: usize> From<[T; D1]> for Array<T, Vec<T>> {
+    fn from(data: [T; D1]) -> Self {
         let shape = vec![data.len()];
         Array {
-            buf: Vec::from(data),
+            _marker: PhantomData,
+            array: Vec::from(data),
             shape,
         }
     }
 }
 
-impl<T, const D1: usize, const D2: usize> From<[[T; D1]; D2]> for Array<T>
+impl<T, const D1: usize, const D2: usize> From<[[T; D1]; D2]> for Array<T, Vec<T>>
 where
     T: Clone,
 {
-    fn from(data: [[T; D1]; D2]) -> Array<T> {
-        let mut buf = Vec::with_capacity(D1 * D2);
+    fn from(data: [[T; D1]; D2]) -> Self {
+        let mut array = Vec::with_capacity(D1 * D2);
         for i in 0..D2 {
-            buf.extend_from_slice(&data[i]);
+            array.extend_from_slice(&data[i]);
         }
         let shape = vec![D2, D1];
-        Array { buf, shape }
-    }
-}
-
-impl<T> From<Vec<T>> for Array<T> {
-    fn from(buf: Vec<T>) -> Array<T> {
-        let shape = vec![buf.len()];
-        Array { buf, shape }
-    }
-}
-
-impl<T> From<Vec<Vec<T>>> for Array<T> {
-    fn from(buf: Vec<Vec<T>>) -> Array<T> {
-        if buf.is_empty() || buf[0].is_empty() {
-            return Array::empty();
+        Array {
+            _marker: PhantomData,
+            array,
+            shape,
         }
-
-        let rows = buf.len();
-        let cols = buf[0].len();
-        let buf = buf
-            .into_iter()
-            .reduce(|mut accum, item| {
-                assert_eq!(item.len(), cols);
-                accum.extend(item);
-                accum
-            })
-            .unwrap();
-        let shape = vec![rows, cols];
-        Array { buf, shape }
     }
 }
 
-pub struct Iter<'a, T> {
-    array: &'a Array<T>,
+impl<T> From<Vec<T>> for Array<T, Vec<T>>
+where
+    T: Clone,
+{
+    fn from(array: Vec<T>) -> Self {
+        let shape = vec![array.len()];
+        Array {
+            _marker: PhantomData,
+            array,
+            shape,
+        }
+    }
+}
+
+impl<T> From<Vec<Vec<T>>> for Array<T, Vec<T>>
+where
+    T: Clone,
+{
+    fn from(array: Vec<Vec<T>>) -> Self {
+        let rows = array.len();
+        let cols = array[0].len();
+        let array = array.into_iter().fold(Vec::new(), |mut accum, row| {
+            accum.extend(row);
+            accum
+        });
+        let shape = vec![rows, cols];
+        Array {
+            _marker: PhantomData,
+            array,
+            shape,
+        }
+    }
+}
+
+impl<T> From<&[T]> for Array<T, Vec<T>>
+where
+    T: Clone,
+{
+    fn from(array: &[T]) -> Self {
+        let array: Vec<T> = array.to_vec();
+        let shape = vec![array.len()];
+        Array {
+            _marker: PhantomData,
+            array,
+            shape,
+        }
+    }
+}
+
+impl<'a, T> From<&'a [T]> for Array<T, &'a [T]> {
+    fn from(array: &'a [T]) -> Self {
+        let shape = vec![array.len()];
+        Array {
+            _marker: PhantomData,
+            array: array,
+            shape,
+        }
+    }
+}
+
+impl<'a, T> From<&'a mut [T]> for Array<T, &'a mut [T]> {
+    fn from(array: &'a mut [T]) -> Self {
+        let shape = vec![array.len()];
+        Array {
+            _marker: PhantomData,
+            array: array,
+            shape,
+        }
+    }
+}
+
+pub struct Iter<'a, T, A> {
+    array: &'a Array<T, A>,
     offset: usize,
 }
 
-impl<'a, T> Iterator for Iter<'a, T> {
-    type Item = &'a T;
+impl<'a, T, A> Iterator for Iter<'a, T, A>
+where
+    T: Copy,
+    A: AsRef<[T]>,
+{
+    type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
+        let array = self.array.as_ref();
         let offset = self.offset;
         self.offset += 1;
 
-        if offset == self.array.buf.len() {
+        if offset == array.len() {
             return None;
         }
 
-        Some(&self.array.buf[offset])
+        Some(array[offset])
     }
 }
 
-pub struct IterMut<'a, T> {
-    array: &'a mut Array<T>,
+pub struct IterMut<'a, T, A> {
+    array: &'a mut Array<T, A>,
     offset: usize,
 }
 
-impl<'a, T> Iterator for IterMut<'a, T> {
+impl<'a, T, A> Iterator for IterMut<'a, T, A>
+where
+    A: AsMut<[T]>,
+{
     type Item = &'a mut T;
 
     fn next(&mut self) -> Option<Self::Item> {
+        let array = self.array.as_mut();
         let offset = self.offset;
         self.offset += 1;
 
-        if offset == self.array.buf.len() {
+        if offset == array.len() {
             return None;
         }
 
@@ -284,7 +408,7 @@ impl<'a, T> Iterator for IterMut<'a, T> {
         // The Rust compiler does not know that when you ask a mutable iterator for the next
         // element, that you get a different reference every time and never the same reference
         // twice. Of course, we know that such an iterator won't give you the same reference twice.
-        unsafe { Some(mem::transmute(&mut self.array.buf[offset])) }
+        unsafe { Some(mem::transmute(&mut array[offset])) }
     }
 }
 
@@ -294,20 +418,20 @@ mod tests {
 
     #[test]
     fn new() {
-        let array: Array<u8> = Array::new(vec![2, 3], 0);
+        let array = Array::new(vec![2, 3], 0);
         assert!(!array.shape().is_empty());
         assert_eq!(array.shape(), &vec![2, 3]);
     }
 
     #[test]
     fn empty() {
-        let array: Array<u8> = Array::empty();
+        let array: Array<u8, _> = Array::empty();
         assert!(array.shape().is_empty());
     }
 
     #[test]
     fn reshape() {
-        let array: Array<u8> = Array::new(vec![2, 3], 0);
+        let array = Array::new(vec![2, 3], 0);
         assert_eq!(array.shape(), &vec![2, 3]);
         let array = array.reshape(vec![3, 2]);
         assert_eq!(array.shape(), &vec![3, 2]);
@@ -316,7 +440,7 @@ mod tests {
     #[test]
     fn from_array_1d() {
         let data = [1, 2, 3];
-        let array: Array<u8> = Array::from(data);
+        let array = Array::from(data);
         assert_eq!(array.shape().len(), 1);
         assert_eq!(array.shape()[0], 3);
     }
@@ -324,7 +448,7 @@ mod tests {
     #[test]
     fn from_array_2d() {
         let data = [[1, 2, 3], [4, 5, 6]];
-        let array: Array<u8> = Array::from(data);
+        let array: Array<u8, Vec<u8>> = Array::from(data);
         assert_eq!(array.shape().len(), 2);
         assert_eq!(array.shape()[0], 2);
         assert_eq!(array.shape()[1], 3);
@@ -332,38 +456,38 @@ mod tests {
 
     #[test]
     fn transpose_1d() {
-        let array: Array<i8> = Array::from([1, 2, -3]);
+        let array = Array::from([1, 2, -3]);
         let array = array.transpose(vec![]);
         assert_eq!(array.shape(), &vec![3]);
-        assert_eq!(array.as_slice(), &vec![1, 2, -3]);
+        assert_eq!(array.as_ref(), &vec![1, 2, -3]);
     }
 
     #[test]
     fn transpose_matrix() {
-        let array: Array<i8> = Array::from([[1, 2, -3], [3, 4, -5]]);
+        let array: Array<i8, Vec<i8>> = Array::from([[1, 2, -3], [3, 4, -5]]);
         let array = array.transpose(vec![]);
         assert_eq!(array.shape(), &vec![3, 2]);
         let matrix = array.as_matrix();
-        assert_eq!(matrix[0], vec![1, 3]);
-        assert_eq!(matrix[1], vec![2, 4]);
-        assert_eq!(matrix[2], vec![-3, -5]);
+        assert_eq!(matrix[0], [1, 3]);
+        assert_eq!(matrix[1], [2, 4]);
+        assert_eq!(matrix[2], [-3, -5]);
     }
 
     #[test]
-    fn transpose_2d_square() {
-        let array: Array<i8> = Array::from([[1, 2], [3, 4]]);
+    fn transpose_matrix_square() {
+        let array: Array<i8, Vec<i8>> = Array::from([[1, 2], [3, 4]]);
         let array = array.transpose(vec![]);
         assert_eq!(array.shape(), &vec![2, 2]);
         let matrix = array.as_matrix();
-        assert_eq!(matrix[0], vec![1, 3]);
-        assert_eq!(matrix[1], vec![2, 4]);
+        assert_eq!(matrix[0], [1, 3]);
+        assert_eq!(matrix[1], [2, 4]);
 
-        let array: Array<i8> = Array::from([[1, 2, 3], [4, 5, 6], [7, 8, 9]]);
+        let array: Array<i8, Vec<i8>> = Array::from([[1, 2, 3], [4, 5, 6], [7, 8, 9]]);
         let array = array.transpose(vec![]);
         assert_eq!(array.shape(), &vec![3, 3]);
         let matrix = array.as_matrix();
-        assert_eq!(matrix[0], vec![1, 4, 7]);
-        assert_eq!(matrix[1], vec![2, 5, 8]);
-        assert_eq!(matrix[2], vec![3, 6, 9]);
+        assert_eq!(matrix[0], [1, 4, 7]);
+        assert_eq!(matrix[1], [2, 5, 8]);
+        assert_eq!(matrix[2], [3, 6, 9]);
     }
 }
