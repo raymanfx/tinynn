@@ -225,6 +225,63 @@ where
     })
 }
 
+/// Returns the mean average error.
+///
+/// # Arguments
+///
+/// * `preds` - Predictions
+/// * `targets` - Target values
+pub fn mae<T>(preds: impl IntoIterator<Item = T>, targets: impl IntoIterator<Item = T>) -> f32
+where
+    T: Copy + Into<f32>,
+{
+    let (count, error) =
+        preds
+            .into_iter()
+            .zip(targets.into_iter())
+            .fold((0, 0.0), |(count, accum), (p, y)| {
+                let count = count + 1;
+                let accum = accum + f32::abs(y.into() - p.into());
+                (count, accum)
+            });
+    error / count as f32
+}
+
+/// Returns the mean squared error.
+///
+/// # Arguments
+///
+/// * `preds` - Predictions
+/// * `targets` - Target values
+pub fn mse<T>(preds: impl IntoIterator<Item = T>, targets: impl IntoIterator<Item = T>) -> f32
+where
+    T: Into<f32>,
+{
+    let (count, error) =
+        preds
+            .into_iter()
+            .zip(targets.into_iter())
+            .fold((0, 0.0), |(count, accum), (p, y)| {
+                let count = count + 1;
+                let accum = accum + f32::pow(y.into() - p.into(), 2);
+                (count, accum)
+            });
+    error / count as f32
+}
+
+/// Returns the root mean squared error.
+///
+/// # Arguments
+///
+/// * `preds` - Predictions
+/// * `targets` - Target values
+pub fn rmse<T>(preds: impl IntoIterator<Item = T>, targets: impl IntoIterator<Item = T>) -> f32
+where
+    T: Into<f32>,
+{
+    mse(preds, targets).sqrt()
+}
+
 #[cfg(test)]
 mod tests {
     #[test]

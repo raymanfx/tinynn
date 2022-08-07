@@ -3,9 +3,10 @@ use std::ops::{Add, Mul, Sub};
 
 use crate::array::Array;
 
-impl<T> Array<T>
+impl<T, A> Array<T, A>
 where
     T: Copy + Mul<Output = T> + Zero,
+    A: AsRef<[T]>,
 {
     /// Returns the dot product of the two arrays.
     ///
@@ -17,7 +18,7 @@ where
     /// # Arguments
     ///
     /// * `rhs` - Right hand side array
-    pub fn dot(&self, rhs: &Array<T>) -> Array<T> {
+    pub fn dot(&self, rhs: &Array<T, A>) -> Array<T, Vec<T>> {
         // helper: 1D x 1D dot product (inner product of vectors)
         fn dot_1d<T: Copy + Zero + Mul<Output = T>>(lhs: &[T], rhs: &[T]) -> T {
             lhs.iter()
@@ -26,7 +27,10 @@ where
         }
 
         // helper: 2D x 2D dot product (inner product of matrices)
-        fn dot_2d<T: Copy + Zero + Mul<Output = T>>(lhs: &Array<T>, rhs: &Array<T>) -> Array<T> {
+        fn dot_2d<T: Copy + Zero + Mul<Output = T>, A: AsRef<[T]>>(
+            lhs: &Array<T, A>,
+            rhs: &Array<T, A>,
+        ) -> Array<T, Vec<T>> {
             // ensure we are dealing with matrices
             assert_eq!(lhs.shape.len(), 2);
             assert_eq!(rhs.shape.len(), 2);
@@ -67,7 +71,7 @@ where
                 rhs.shape()
             );
 
-            let dot = dot_1d(self.as_slice(), rhs.as_slice());
+            let dot = dot_1d(self.as_ref(), rhs.as_ref());
             return Array::from([dot]);
         }
 
@@ -94,13 +98,15 @@ where
     }
 }
 
-impl<T> Add for Array<T>
+impl<T, A, A2> Add<Array<T, A2>> for Array<T, A>
 where
     T: Copy + Add<Output = T>,
+    A: AsMut<[T]>,
+    A2: AsRef<[T]>,
 {
     type Output = Self;
 
-    fn add(mut self, rhs: Self) -> Self::Output {
+    fn add(mut self, rhs: Array<T, A2>) -> Self::Output {
         // if the shapes do not match, this operation is illegal
         if self.shape() != rhs.shape() {
             panic!(
@@ -113,14 +119,15 @@ where
         // fill the output array
         self.iter_mut()
             .zip(rhs.iter())
-            .for_each(|(lhs, rhs)| *lhs = *lhs + *rhs);
+            .for_each(|(lhs, rhs)| *lhs = *lhs + rhs);
         self
     }
 }
 
-impl<T> Add<T> for Array<T>
+impl<T, A> Add<T> for Array<T, A>
 where
     T: Copy + Add<Output = T>,
+    A: AsMut<[T]>,
 {
     type Output = Self;
 
@@ -131,13 +138,15 @@ where
     }
 }
 
-impl<T> Mul for Array<T>
+impl<T, A, A2> Mul<Array<T, A2>> for Array<T, A>
 where
-    T: Copy + Mul<Output = T> + Zero,
+    T: Copy + Mul<Output = T>,
+    A: AsMut<[T]>,
+    A2: AsRef<[T]>,
 {
     type Output = Self;
 
-    fn mul(mut self, rhs: Self) -> Self::Output {
+    fn mul(mut self, rhs: Array<T, A2>) -> Self::Output {
         // if the shapes do not match, this operation is illegal
         if self.shape() != rhs.shape() {
             panic!(
@@ -150,14 +159,15 @@ where
         // fill the output array
         self.iter_mut()
             .zip(rhs.iter())
-            .for_each(|(lhs, rhs)| *lhs = *lhs * *rhs);
+            .for_each(|(lhs, rhs)| *lhs = *lhs * rhs);
         self
     }
 }
 
-impl<T> Mul<T> for Array<T>
+impl<T, A> Mul<T> for Array<T, A>
 where
     T: Copy + Mul<Output = T>,
+    A: AsMut<[T]>,
 {
     type Output = Self;
 
@@ -168,13 +178,15 @@ where
     }
 }
 
-impl<T> Sub for Array<T>
+impl<T, A, A2> Sub<Array<T, A2>> for Array<T, A>
 where
     T: Copy + Sub<Output = T>,
+    A: AsMut<[T]>,
+    A2: AsRef<[T]>,
 {
     type Output = Self;
 
-    fn sub(mut self, rhs: Self) -> Self::Output {
+    fn sub(mut self, rhs: Array<T, A2>) -> Self::Output {
         // if the shapes do not match, this operation is illegal
         if self.shape() != rhs.shape() {
             panic!(
@@ -187,14 +199,15 @@ where
         // fill the output array
         self.iter_mut()
             .zip(rhs.iter())
-            .for_each(|(lhs, rhs)| *lhs = *lhs - *rhs);
+            .for_each(|(lhs, rhs)| *lhs = *lhs - rhs);
         self
     }
 }
 
-impl<T> Sub<T> for Array<T>
+impl<T, A> Sub<T> for Array<T, A>
 where
     T: Copy + Sub<Output = T>,
+    A: AsMut<[T]>,
 {
     type Output = Self;
 
@@ -211,74 +224,71 @@ mod tests {
 
     #[test]
     fn add() {
-        let array: Array<u8> = Array::from([1, 2, 3]);
+        let array = Array::from([1, 2, 3]);
         let array = array + Array::from([2, 1, 0]);
-        assert_eq!(array.as_slice(), &vec![3, 3, 3]);
+        assert_eq!(array.as_ref(), &vec![3, 3, 3]);
     }
 
     #[test]
     fn add_scalar() {
-        let array: Array<u8> = Array::from([1, 2, 3]);
+        let array = Array::from([1, 2, 3]);
         let array = array + 3;
-        assert_eq!(array.as_slice(), &vec![4, 5, 6]);
+        assert_eq!(array.as_ref(), &vec![4, 5, 6]);
     }
 
     #[test]
     fn mul_1d() {
-        let array: Array<u8> = Array::from([1, 2, 3]);
+        let array = Array::from([1, 2, 3]);
         let array = array * Array::from([2, 3, 4]);
-        assert_eq!(array.as_slice(), &vec![2, 6, 12]);
+        assert_eq!(array.as_ref(), &vec![2, 6, 12]);
     }
 
     #[test]
     fn mul_2d() {
-        let array: Array<u8> = Array::from([[1, 2], [2, 3]]);
+        let array: Array<i32, Vec<i32>> = Array::from([[1, 2], [2, 3]]);
         let array = array * Array::from([[3, 4], [4, 5]]);
-        assert_eq!(array.as_slice(), Array::from([[3, 8], [8, 15]]).as_slice());
+        assert_eq!(array.as_ref(), Array::from([[3, 8], [8, 15]]).as_ref());
     }
 
     #[test]
     fn mul_scalar() {
-        let array: Array<i8> = Array::from([1, 2, -3]);
+        let array = Array::from([1, 2, -3]);
         let array = array * -1;
-        assert_eq!(array.as_slice(), &vec![-1, -2, 3]);
+        assert_eq!(array.as_ref(), &vec![-1, -2, 3]);
     }
 
     #[test]
     fn dot_1d() {
-        let array: Array<u8> = Array::from([1, 2, 3]);
+        let array = Array::from([1, 2, 3]);
         let array = array.dot(&Array::from([2, 3, 4]));
-        assert_eq!(array.as_slice(), &vec![20]);
+        assert_eq!(array.as_ref(), &vec![20]);
     }
 
     #[test]
     fn dot_2d() {
-        let array: Array<u8> = Array::from([[1, 2], [2, 3]]);
+        let array: Array<i32, Vec<i32>> = Array::from([[1, 2], [2, 3]]);
         let array = array.dot(&Array::from([[3, 4], [4, 5]]));
-        assert_eq!(
-            array.as_slice(),
-            Array::from([[11, 14], [18, 23]]).as_slice()
-        );
+        assert_eq!(array.as_ref(), Array::from([[11, 14], [18, 23]]).as_ref());
 
-        let array: Array<u8> = Array::from([[1, 2], [2, 3], [3, 4]]);
+        let array: Array<i32, Vec<i32>> = Array::from([[1, 2], [2, 3], [3, 4]]);
         let array = array.dot(&Array::from([[3, 4, 5], [5, 6, 7]]));
         assert_eq!(
-            array.as_slice(),
-            Array::from([[13, 16, 19], [21, 26, 31], [29, 36, 43]]).as_slice()
+            array.as_ref(),
+            Array::from([[13, 16, 19], [21, 26, 31], [29, 36, 43]]).as_ref()
         );
     }
 
     #[test]
     fn sub() {
-        let array: Array<i8> = Array::from([1, 2, 3]);
+        let array = Array::from([1, 2, 3]);
         let array = array - Array::from([2, 1, 0]);
-        assert_eq!(array.as_slice(), &vec![-1, 1, 3]);
+        assert_eq!(array.as_ref(), &vec![-1, 1, 3]);
     }
 
     #[test]
     fn sub_scalar() {
-        let array: Array<i8> = Array::from([1, 2, 3]);
+        let array = Array::from([1, 2, 3]);
         let array = array - 3;
-        assert_eq!(array.as_slice(), &vec![-2, -1, 0]);
+        assert_eq!(array.as_ref(), &vec![-2, -1, 0]);
     }
 }
