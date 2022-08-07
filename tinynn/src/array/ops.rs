@@ -101,11 +101,6 @@ where
     type Output = Self;
 
     fn add(mut self, rhs: Self) -> Self::Output {
-        // if there are no elements to add, we can bail out early
-        if self.shape().len() == 0 || rhs.shape().len() == 0 {
-            return self;
-        }
-
         // if the shapes do not match, this operation is illegal
         if self.shape() != rhs.shape() {
             panic!(
@@ -143,11 +138,6 @@ where
     type Output = Self;
 
     fn mul(mut self, rhs: Self) -> Self::Output {
-        // if there are no elements to add, we can bail out early
-        if self.shape().len() == 0 || rhs.shape().len() == 0 {
-            return self;
-        }
-
         // if the shapes do not match, this operation is illegal
         if self.shape() != rhs.shape() {
             panic!(
@@ -185,11 +175,6 @@ where
     type Output = Self;
 
     fn sub(mut self, rhs: Self) -> Self::Output {
-        // if there are no elements to substract, we can bail out early
-        if self.shape().len() == 0 || rhs.shape().len() == 0 {
-            return self;
-        }
-
         // if the shapes do not match, this operation is illegal
         if self.shape() != rhs.shape() {
             panic!(
