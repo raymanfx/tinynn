@@ -315,4 +315,28 @@ mod tests {
         let std = super::std(data, 1.0);
         assert_eq!(std, (10.0_f32 / 4.0).sqrt());
     }
+
+    #[test]
+    fn mae() {
+        let predictions = vec![1.0, 2.0, 3.0, 4.0];
+        let targets = vec![2.0, 4.0, 1.0, 3.0];
+        let mae = super::mae(predictions, targets);
+        assert_eq!(mae, 6.0 / 4.0);
+    }
+
+    #[test]
+    fn mse() {
+        let predictions = vec![1.0, 2.0, 3.0, 4.0];
+        let targets = vec![2.0, 4.0, 1.0, 3.0];
+        let mse = super::mse(predictions, targets);
+        assert_eq!(mse, 10.0 / 4.0);
+    }
+
+    #[test]
+    fn rmse() {
+        let predictions = vec![1.0, 2.0, 3.0, 4.0];
+        let targets = vec![2.0, 4.0, 1.0, 3.0];
+        let rmse = super::rmse(predictions, targets);
+        assert_eq!(rmse, (10.0_f32 / 4.0).sqrt());
+    }
 }
