@@ -18,7 +18,10 @@ where
     /// # Arguments
     ///
     /// * `rhs` - Right hand side array
-    pub fn dot(&self, rhs: &Array<T, A>) -> Array<T, Vec<T>> {
+    pub fn dot<A2>(&self, rhs: &Array<T, A2>) -> Array<T, Vec<T>>
+    where
+        A2: AsRef<[T]>,
+    {
         // helper: 1D x 1D dot product (inner product of vectors)
         fn dot_1d<T: Copy + Zero + Mul<Output = T>>(lhs: &[T], rhs: &[T]) -> T {
             lhs.iter()
@@ -27,9 +30,9 @@ where
         }
 
         // helper: 2D x 2D dot product (inner product of matrices)
-        fn dot_2d<T: Copy + Zero + Mul<Output = T>, A: AsRef<[T]>>(
+        fn dot_2d<T: Copy + Zero + Mul<Output = T>, A: AsRef<[T]>, A2: AsRef<[T]>>(
             lhs: &Array<T, A>,
-            rhs: &Array<T, A>,
+            rhs: &Array<T, A2>,
         ) -> Array<T, Vec<T>> {
             // ensure we are dealing with matrices
             assert_eq!(lhs.shape.len(), 2);
