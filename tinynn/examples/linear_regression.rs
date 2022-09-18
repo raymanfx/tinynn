@@ -76,18 +76,8 @@ fn main() {
     println!("var={:?}", vars);
     println!("stdev={:?}", stds);
 
-    // standardize data: remove the mean and scale to unit variance
-    // z = (x - u) / s
-    // where u: mean, s: standard deviation
-    let data: Vec<Vec<f32>> = data
-        .into_iter()
-        .map(|row| {
-            row.into_iter()
-                .zip(means.iter().zip(stds.iter()))
-                .map(|(x, (mean, stddev))| (x - mean) / stddev)
-                .collect()
-        })
-        .collect();
+    // standardize each column (axis 1) of the dataset
+    let data: Vec<Vec<f32>> = stat::standardize2(data, 1);
 
     // split into train and test data sets
     let (x_train, x_test) = data.iter().enumerate().fold(

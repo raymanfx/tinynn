@@ -1,4 +1,4 @@
-use num_traits::{Float, FromPrimitive, Pow, Zero};
+use num_traits::{FromPrimitive, Pow, Zero};
 use std::ops::{Add, Div, Sub};
 
 /// Helper: swap rows and cols of a 2-dimensional iterator.
@@ -88,9 +88,11 @@ where
         + FromPrimitive
         + Sub<Output = T>
         + Pow<u8, Output = T>
-        + Float,
+        + Into<f32>
+        + Zero,
 {
-    var(values, ddof).sqrt()
+    let var = var(values, ddof);
+    T::from_f32(var.into().sqrt()).unwrap()
 }
 
 /// Returns the individual sums of all elements of an axis.
@@ -208,7 +210,8 @@ where
         + FromPrimitive
         + Sub<Output = T>
         + Pow<u8, Output = T>
-        + Float,
+        + Into<f32>
+        + Zero,
 {
     let values = match axis {
         0 => values
@@ -223,6 +226,82 @@ where
         accum.push(std(col, ddof));
         accum
     })
+}
+
+/// Standardizes a given matrix.
+///
+/// Remove the mean and scale to unit variance
+/// z = (x - u) / s
+/// where u: mean, s: standard deviation
+///
+/// # Arguments
+///
+/// * `values` - Input values
+pub fn standardize<T>(values: impl IntoIterator<Item = T>) -> Vec<T>
+where
+    T: Copy
+        + Add<Output = T>
+        + Zero
+        + Div<T, Output = T>
+        + FromPrimitive
+        + Sub<Output = T>
+        + Pow<u8, Output = T>
+        + Into<f32>,
+{
+    let values: Vec<T> = values.into_iter().collect();
+
+    // compute stats
+    let mean = mean(values.clone());
+    let std = std(values.clone(), T::zero());
+
+    values.into_iter().map(|x| (x - mean) / std).collect()
+}
+
+/// Standardizes a given matrix.
+///
+/// Remove the mean and scale to unit variance
+/// z = (x - u) / s
+/// where u: mean, s: standard deviation
+///
+/// The outer iterator is supposed to go thorugh rows, the inner one through columns.
+/// By default, the mean and standard deviation are computed per column.
+///
+/// # Arguments
+///
+/// * `values` - Input values
+/// * `axis` - Axis to process (0 for rows, 1 for cols)
+pub fn standardize2<T>(
+    values: impl IntoIterator<Item = impl IntoIterator<Item = T>>,
+    axis: usize,
+) -> Vec<Vec<T>>
+where
+    T: Copy
+        + Add<Output = T>
+        + Zero
+        + Div<T, Output = T>
+        + FromPrimitive
+        + Sub<Output = T>
+        + Pow<u8, Output = T>
+        + Into<f32>,
+{
+    let values = match axis {
+        0 => values
+            .into_iter()
+            .map(|row| row.into_iter().collect())
+            .collect(),
+        1 => swap_rows_cols(values),
+        _ => panic!("invalid axis"),
+    };
+
+    // standardize each row
+    let values = values.into_iter().map(|row| standardize(row));
+
+    // restore original axis layout if necessary
+    match axis {
+        0 => values.collect(),
+        1 => swap_rows_cols(values),
+        _ => panic!("invalid axis"),
+    }
 }
 
 /// Returns the mean average error.
@@ -314,6 +393,42 @@ mod tests {
         assert_eq!(std, (10.0_f32 / 5.0).sqrt());
         let std = super::std(data, 1.0);
         assert_eq!(std, (10.0_f32 / 4.0).sqrt());
+    }
+
+    #[test]
+    fn standardize() {
+        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0];
+        let mean = 4.0;
+        let _var = 4.0;
+        let std = 2.0;
+        let standardized = super::standardize(data.clone());
+        standardized
+            .into_iter()
+            .enumerate()
+            .for_each(|(i, x)| assert_eq!(x, (data[i] - mean) / std));
+    }
+
+    #[test]
+    fn standardize2() {
+        let data = vec![vec![1.0f32, 7.0f32], vec![2.0f32, 5.0f32]];
+        let standardized = super::standardize2(data.clone(), 0);
+        let means = super::mean2(data.clone(), 0);
+        let stds = super::std2(data.clone(), 0, 0.0);
+        standardized.into_iter().enumerate().for_each(|(i, row)| {
+            row.into_iter()
+                .enumerate()
+                .for_each(|(j, x)| assert_eq!(x, (data[i][j] - means[i]) / stds[i]))
+        });
+
+        let data = vec![vec![1.0f32, 2.0f32], vec![7.0f32, 5.0f32]];
+        let standardized = super::standardize2(data.clone(), 1);
+        let means = super::mean2(data.clone(), 1);
+        let stds = super::std2(data.clone(), 1, 0.0);
+        standardized.into_iter().enumerate().for_each(|(i, row)| {
+            row.into_iter()
+                .enumerate()
+                .for_each(|(j, x)| assert_eq!(x, (data[i][j] - means[j]) / stds[j]));
+        });
     }
 
     #[test]
