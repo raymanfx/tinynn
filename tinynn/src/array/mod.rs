@@ -1,8 +1,9 @@
-use std::{marker::PhantomData, mem};
+use std::marker::PhantomData;
 
 mod matrix;
 use matrix::Matrix;
 
+mod iter;
 mod ops;
 
 /// A generic n-dimensional array.
@@ -24,22 +25,6 @@ impl<T, A> Array<T, A> {
     ///      `vec![3, 3]` represents a matrix with three rows and three columns.
     pub fn shape(&self) -> &Vec<usize> {
         &self.shape
-    }
-
-    /// Returns an iterator over the array elements.
-    pub fn iter(&self) -> Iter<T, A> {
-        Iter {
-            array: self,
-            offset: 0,
-        }
-    }
-
-    /// Returns an iterator that allows modifying each value.
-    pub fn iter_mut(&mut self) -> IterMut<T, A> {
-        IterMut {
-            array: self,
-            offset: 0,
-        }
     }
 }
 
@@ -354,60 +339,6 @@ impl<'a, T> From<&'a mut [T]> for Array<T, &'a mut [T]> {
             array: array,
             shape,
         }
-    }
-}
-
-pub struct Iter<'a, T, A> {
-    array: &'a Array<T, A>,
-    offset: usize,
-}
-
-impl<'a, T, A> Iterator for Iter<'a, T, A>
-where
-    T: Copy,
-    A: AsRef<[T]>,
-{
-    type Item = T;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let array = self.array.as_ref();
-        let offset = self.offset;
-        self.offset += 1;
-
-        if offset == array.len() {
-            return None;
-        }
-
-        Some(array[offset])
-    }
-}
-
-pub struct IterMut<'a, T, A> {
-    array: &'a mut Array<T, A>,
-    offset: usize,
-}
-
-impl<'a, T, A> Iterator for IterMut<'a, T, A>
-where
-    A: AsMut<[T]>,
-{
-    type Item = &'a mut T;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let array = self.array.as_mut();
-        let offset = self.offset;
-        self.offset += 1;
-
-        if offset == array.len() {
-            return None;
-        }
-
-        // This is safe because...
-        // (from http://stackoverflow.com/questions/25730586):
-        // The Rust compiler does not know that when you ask a mutable iterator for the next
-        // element, that you get a different reference every time and never the same reference
-        // twice. Of course, we know that such an iterator won't give you the same reference twice.
-        unsafe { Some(mem::transmute(&mut array[offset])) }
     }
 }
 
